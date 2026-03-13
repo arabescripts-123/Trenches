@@ -188,7 +188,7 @@ fovBox.FocusLost:Connect(function()
 end)
 
 -- Ghost TP
-local ghostBtn, ghostInd = createToggle(ContentCombat, "Ghost TP [G]", 123)
+local ghostBtn, ghostInd = createToggle(ContentCombat, "Ghost TP [CapsLk]", 123)
 
 -- Info
 local infoLbl = Instance.new("TextLabel")
@@ -197,7 +197,7 @@ infoLbl.BackgroundTransparency = 1
 infoLbl.Position = UDim2.new(0, 10, 0, 160)
 infoLbl.Size = UDim2.new(0, 210, 0, 20)
 infoLbl.Font = Enum.Font.Gotham
-infoLbl.Text = "Z=Menu | RMB=Aim | G=Ghost"
+infoLbl.Text = "Z=Menu | RMB=Aim | CapsLk=Ghost"
 infoLbl.TextColor3 = Color3.fromRGB(100, 100, 100)
 infoLbl.TextSize = 10
 
@@ -511,7 +511,7 @@ UIS.InputBegan:Connect(function(input, gp)
         else
             MainFrame.Visible = not MainFrame.Visible
         end
-    elseif input.KeyCode == Enum.KeyCode.G then
+    elseif input.KeyCode == Enum.KeyCode.CapsLock then
         ghostEnabled = not ghostEnabled
         ghostInd.BackgroundColor3 = ghostEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
         if ghostEnabled then enableGhostMode() else disableGhostMode(true) end
@@ -549,4 +549,4 @@ player.CharacterAdded:Connect(function()
     end
 end)
 
-print("[WW1] Carregado! Z=Menu | J=ESP X=Aimbot G=Ghost Q=ClickTP")
+print("[WW1] Carregado! Z=Menu | J=ESP X=Aimbot CapsLk=Ghost Q=ClickTP")
