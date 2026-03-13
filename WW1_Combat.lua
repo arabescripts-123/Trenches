@@ -12,15 +12,16 @@ pcall(function() local e = guiParent:FindFirstChild("WW1Gui") if e then e:Destro
 task.wait(0.2)
 
 -- CONFIG
-local BULLET_SPEED = 500
-local GRAVITY = Vector3.new(0, -workspace.Gravity, 0)
 local AIM_FOV = 300
 
 -- STATE
-local espEnabled, aimbotEnabled, predictionEnabled = false, false, true
+local espEnabled, aimbotEnabled = false, false
 local rightMouseDown = false
-local espBoxes, espConnections, prevPositions = {}, {}, {}
+local espBoxes, espConnections = {}, {}
 local clickTpEnabled = false
+local ghostEnabled = false
+local ghostPart, ghostConnection, ghostOverlay, originalCFrame = nil, nil, nil, nil
+local ghostSpeed = 65
 
 -- ============ GUI ============
 local ScreenGui = Instance.new("ScreenGui")
@@ -32,7 +33,7 @@ local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(35, 30, 25)
 MainFrame.Position = UDim2.new(0.02, 0, 0.25, 0)
-MainFrame.Size = UDim2.new(0, 230, 0, 370)
+MainFrame.Size = UDim2.new(0, 230, 0, 360)
 MainFrame.ClipsDescendants = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 local s = Instance.new("UIStroke", MainFrame)
@@ -155,45 +156,13 @@ end
 -- ============ ABA COMBAT ============
 local espBtn, espInd = createToggle(ContentCombat, "ESP [J]", 0)
 local aimBtn, aimInd = createToggle(ContentCombat, "Aimbot [X] (RMB)", 35)
-local predBtn, predInd = createToggle(ContentCombat, "Predição Bala [P]", 70)
-predInd.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
-
--- Bullet Speed
-local bsLabel = Instance.new("TextLabel")
-bsLabel.Parent = ContentCombat
-bsLabel.BackgroundTransparency = 1
-bsLabel.Position = UDim2.new(0, 10, 0, 108)
-bsLabel.Size = UDim2.new(0, 210, 0, 16)
-bsLabel.Font = Enum.Font.Gotham
-bsLabel.Text = "Vel. Bala: " .. BULLET_SPEED .. " studs/s"
-bsLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
-bsLabel.TextSize = 11
-bsLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local bsBox = Instance.new("TextBox")
-bsBox.Parent = ContentCombat
-bsBox.BackgroundColor3 = Color3.fromRGB(50, 45, 40)
-bsBox.Position = UDim2.new(0, 10, 0, 126)
-bsBox.Size = UDim2.new(0, 100, 0, 24)
-bsBox.Font = Enum.Font.Gotham
-bsBox.Text = tostring(BULLET_SPEED)
-bsBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-bsBox.TextSize = 11
-bsBox.ClearTextOnFocus = false
-Instance.new("UICorner", bsBox).CornerRadius = UDim.new(0, 4)
-
-bsBox.FocusLost:Connect(function()
-    local n = tonumber(bsBox.Text)
-    if n and n > 0 then BULLET_SPEED = n; bsLabel.Text = "Vel. Bala: " .. BULLET_SPEED .. " studs/s"
-    else bsBox.Text = tostring(BULLET_SPEED) end
-end)
 
 -- FOV
 local fovLabel = Instance.new("TextLabel")
 fovLabel.Parent = ContentCombat
 fovLabel.BackgroundTransparency = 1
-fovLabel.Position = UDim2.new(0, 120, 0, 108)
-fovLabel.Size = UDim2.new(0, 100, 0, 16)
+fovLabel.Position = UDim2.new(0, 10, 0, 73)
+fovLabel.Size = UDim2.new(0, 210, 0, 16)
 fovLabel.Font = Enum.Font.Gotham
 fovLabel.Text = "FOV: " .. AIM_FOV
 fovLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
@@ -203,7 +172,7 @@ fovLabel.TextXAlignment = Enum.TextXAlignment.Left
 local fovBox = Instance.new("TextBox")
 fovBox.Parent = ContentCombat
 fovBox.BackgroundColor3 = Color3.fromRGB(50, 45, 40)
-fovBox.Position = UDim2.new(0, 120, 0, 126)
+fovBox.Position = UDim2.new(0, 10, 0, 91)
 fovBox.Size = UDim2.new(0, 100, 0, 24)
 fovBox.Font = Enum.Font.Gotham
 fovBox.Text = tostring(AIM_FOV)
@@ -218,14 +187,17 @@ fovBox.FocusLost:Connect(function()
     else fovBox.Text = tostring(AIM_FOV) end
 end)
 
+-- Ghost TP
+local ghostBtn, ghostInd = createToggle(ContentCombat, "Ghost TP [G]", 123)
+
 -- Info
 local infoLbl = Instance.new("TextLabel")
 infoLbl.Parent = ContentCombat
 infoLbl.BackgroundTransparency = 1
-infoLbl.Position = UDim2.new(0, 10, 0, 158)
+infoLbl.Position = UDim2.new(0, 10, 0, 160)
 infoLbl.Size = UDim2.new(0, 210, 0, 20)
 infoLbl.Font = Enum.Font.Gotham
-infoLbl.Text = "Z=Menu | Segure RMB p/ aimbot"
+infoLbl.Text = "Z=Menu | RMB=Aim | G=Ghost"
 infoLbl.TextColor3 = Color3.fromRGB(100, 100, 100)
 infoLbl.TextSize = 10
 
@@ -385,62 +357,110 @@ local function disableESP()
     espConnections = {}
 end
 
--- ============ VELOCITY + PREDICTION ============
-local function getVelocity(char)
-    if not char then return Vector3.zero end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return Vector3.zero end
-    local vel = hrp.AssemblyLinearVelocity
-    if vel and vel.Magnitude > 0.5 then return vel end
-    local pos = hrp.Position
-    local prev = prevPositions[char]
-    prevPositions[char] = {pos = pos, time = tick()}
-    if prev then
-        local dt = tick() - prev.time
-        if dt > 0 and dt < 0.5 then return (pos - prev.pos) / dt end
-    end
-    return Vector3.zero
+-- ============ GHOST TP ============
+local function enableGhostMode()
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    originalCFrame = player.Character.HumanoidRootPart.CFrame
+    local hum = player.Character:FindFirstChild("Humanoid")
+    if hum then hum.WalkSpeed = 0; hum.JumpPower = 0 end
+
+    ghostPart = Instance.new("Part")
+    ghostPart.Name = "GhostPart"
+    ghostPart.Shape = Enum.PartType.Ball
+    ghostPart.Size = Vector3.new(4, 4, 4)
+    ghostPart.Transparency = 0.3
+    ghostPart.Color = Color3.fromRGB(255, 255, 255)
+    ghostPart.Material = Enum.Material.Neon
+    ghostPart.CanCollide = false
+    ghostPart.Anchored = true
+    ghostPart.CFrame = originalCFrame
+    ghostPart.Parent = workspace
+
+    ghostOverlay = Instance.new("Frame")
+    ghostOverlay.Size = UDim2.new(1, 0, 1, 0)
+    ghostOverlay.BackgroundColor3 = Color3.fromRGB(0, 50, 100)
+    ghostOverlay.BackgroundTransparency = 0.8
+    ghostOverlay.BorderSizePixel = 0
+    ghostOverlay.ZIndex = -1
+    ghostOverlay.Parent = ScreenGui
+
+    workspace.CurrentCamera.CameraSubject = ghostPart
+
+    ghostConnection = RunService.Heartbeat:Connect(function()
+        if not ghostEnabled or not ghostPart or not ghostPart.Parent then return end
+        if UIS:GetFocusedTextBox() then return end
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.CFrame = originalCFrame
+        end
+        local moveDir = Vector3.zero
+        local cam = workspace.CurrentCamera
+        local spd = ghostSpeed / 60
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then spd = spd * 2 end
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.yAxis end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.yAxis end
+        if moveDir.Magnitude > 0 then ghostPart.CFrame = ghostPart.CFrame + moveDir.Unit * spd end
+    end)
 end
 
-local function predictPosition(head, char)
-    if not predictionEnabled or not head or not char then return head and head.Position or Vector3.zero end
-    local origin = workspace.CurrentCamera.CFrame.Position
-    local tPos = head.Position
-    local tVel = getVelocity(char)
-    local dist = (tPos - origin).Magnitude
-    local tt = dist / BULLET_SPEED
-    for _ = 1, 2 do
-        local pred = tPos + tVel * tt
-        pred = pred - GRAVITY * 0.5 * tt * tt
-        dist = (pred - origin).Magnitude
-        tt = dist / BULLET_SPEED
+local function disableGhostMode(teleport)
+    if ghostConnection then ghostConnection:Disconnect(); ghostConnection = nil end
+    if ghostOverlay then ghostOverlay:Destroy(); ghostOverlay = nil end
+    if player.Character then
+        local hum = player.Character:FindFirstChild("Humanoid")
+        if hum then hum.WalkSpeed = 16; hum.JumpPower = 50 end
     end
-    local final = tPos + tVel * tt
-    final = final - GRAVITY * 0.5 * tt * tt
-    return final
+    if ghostPart then
+        local ghostCF = ghostPart.CFrame
+        ghostPart:Destroy(); ghostPart = nil
+        if teleport and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            workspace.CurrentCamera.CameraSubject = player.Character:FindFirstChild("Humanoid")
+            player.Character.HumanoidRootPart.CFrame = ghostCF
+        end
+    end
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        workspace.CurrentCamera.CameraSubject = player.Character.Humanoid
+    end
 end
 
 -- ============ AIMBOT ============
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function isVisible(head, enemyChar)
+    local cam = workspace.CurrentCamera
+    local origin = cam.CFrame.Position
+    local dir = (head.Position - origin)
+    local ignore = {player.Character, enemyChar}
+    rayParams.FilterDescendantsInstances = ignore
+    local result = workspace:Raycast(origin, dir, rayParams)
+    return result == nil
+end
+
 local function getClosestEnemy()
     local cam = workspace.CurrentCamera
     local mouse = player:GetMouse()
     local mPos = Vector2.new(mouse.X, mouse.Y)
-    local closest, shortest, closestChar = nil, AIM_FOV, nil
+    local closest, shortest = nil, AIM_FOV
     for _, plr in pairs(Players:GetPlayers()) do
         if isEnemy(plr) and plr.Character then
             local hum = plr.Character:FindFirstChildOfClass("Humanoid")
             local head = plr.Character:FindFirstChild("Head")
             if hum and head and hum.Health > 0 then
-                local pred = predictPosition(head, plr.Character)
-                local sp, onScreen = cam:WorldToViewportPoint(pred)
+                local sp, onScreen = cam:WorldToViewportPoint(head.Position)
                 if onScreen then
                     local d = (Vector2.new(sp.X, sp.Y) - mPos).Magnitude
-                    if d < shortest then shortest = d; closest = pred; closestChar = plr.Character end
+                    if d < shortest and isVisible(head, plr.Character) then
+                        shortest = d; closest = head.Position
+                    end
                 end
             end
         end
     end
-    return closest, closestChar
+    return closest
 end
 
 RunService.RenderStepped:Connect(function()
@@ -468,21 +488,33 @@ aimBtn.MouseButton1Click:Connect(function()
     aimInd.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
 end)
 
-predBtn.MouseButton1Click:Connect(function()
-    predictionEnabled = not predictionEnabled
-    predInd.BackgroundColor3 = predictionEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
-end)
-
 ctpBtn.MouseButton1Click:Connect(function()
     clickTpEnabled = not clickTpEnabled
     ctpInd.BackgroundColor3 = clickTpEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+end)
+
+ghostBtn.MouseButton1Click:Connect(function()
+    ghostEnabled = not ghostEnabled
+    ghostInd.BackgroundColor3 = ghostEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+    if ghostEnabled then enableGhostMode() else disableGhostMode(true) end
 end)
 
 -- ============ INPUT ============
 UIS.InputBegan:Connect(function(input, gp)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then rightMouseDown = true; return end
     if gp then return end
-    if input.KeyCode == Enum.KeyCode.Z then MainFrame.Visible = not MainFrame.Visible
+    if input.KeyCode == Enum.KeyCode.Z then
+        if ghostEnabled then
+            ghostEnabled = false
+            disableGhostMode(false)
+            ghostInd.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        else
+            MainFrame.Visible = not MainFrame.Visible
+        end
+    elseif input.KeyCode == Enum.KeyCode.G then
+        ghostEnabled = not ghostEnabled
+        ghostInd.BackgroundColor3 = ghostEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+        if ghostEnabled then enableGhostMode() else disableGhostMode(true) end
     elseif input.KeyCode == Enum.KeyCode.J then
         espEnabled = not espEnabled
         espInd.BackgroundColor3 = espEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
@@ -490,9 +522,6 @@ UIS.InputBegan:Connect(function(input, gp)
     elseif input.KeyCode == Enum.KeyCode.X then
         aimbotEnabled = not aimbotEnabled
         aimInd.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
-    elseif input.KeyCode == Enum.KeyCode.P then
-        predictionEnabled = not predictionEnabled
-        predInd.BackgroundColor3 = predictionEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
     elseif input.KeyCode == Enum.KeyCode.Q and clickTpEnabled then
         pcall(function()
             local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -512,4 +541,12 @@ end)
 pcall(function() ScreenGui.Parent = guiParent end)
 if not ScreenGui.Parent then ScreenGui.Parent = player:WaitForChild("PlayerGui") end
 
-print("[WW1] Carregado! Z=Menu | J=ESP X=Aimbot P=Predição Q=ClickTP")
+player.CharacterAdded:Connect(function()
+    if ghostEnabled then
+        ghostEnabled = false
+        disableGhostMode(false)
+        ghostInd.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    end
+end)
+
+print("[WW1] Carregado! Z=Menu | J=ESP X=Aimbot G=Ghost Q=ClickTP")
