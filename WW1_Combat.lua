@@ -19,6 +19,7 @@ local espEnabled, aimbotEnabled = false, false
 local rightMouseDown = false
 local espBoxes, espConnections = {}, {}
 local clickTpEnabled = false
+local tpLockCF, tpLockFrames = nil, 0
 local ghostEnabled = false
 local ghostPart, ghostConnection, ghostOverlay, originalCFrame = nil, nil, nil, nil
 local ghostSpeed = 65
@@ -270,7 +271,11 @@ local function updatePlayerList()
                     if player.Character and plr.Character then
                         local r = player.Character:FindFirstChild("HumanoidRootPart")
                         local t = plr.Character:FindFirstChild("HumanoidRootPart")
-                        if r and t then r.CFrame = t.CFrame * CFrame.new(0, 0, 3) end
+                        if r and t then
+                            local cf = t.CFrame * CFrame.new(0, 0, 3)
+                            r.CFrame = cf
+                            tpLockCF = cf; tpLockFrames = 15
+                        end
                     end
                 end)
             end)
@@ -407,22 +412,21 @@ local function enableGhostMode()
 end
 
 local function disableGhostMode(teleport)
+    local ghostCF = ghostPart and ghostPart.CFrame or nil
     if ghostConnection then ghostConnection:Disconnect(); ghostConnection = nil end
     if ghostOverlay then ghostOverlay:Destroy(); ghostOverlay = nil end
+    if ghostPart then ghostPart:Destroy(); ghostPart = nil end
     if player.Character then
         local hum = player.Character:FindFirstChild("Humanoid")
-        if hum then hum.WalkSpeed = 16; hum.JumpPower = 50 end
-    end
-    if ghostPart then
-        local ghostCF = ghostPart.CFrame
-        ghostPart:Destroy(); ghostPart = nil
-        if teleport and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            workspace.CurrentCamera.CameraSubject = player.Character:FindFirstChild("Humanoid")
-            player.Character.HumanoidRootPart.CFrame = ghostCF
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        if hum then
+            workspace.CurrentCamera.CameraSubject = hum
+            hum.WalkSpeed = 16; hum.JumpPower = 50
         end
-    end
-    if player.Character and player.Character:FindFirstChild("Humanoid") then
-        workspace.CurrentCamera.CameraSubject = player.Character.Humanoid
+        if hrp and teleport and ghostCF then
+            hrp.CFrame = ghostCF
+            tpLockCF = ghostCF; tpLockFrames = 15
+        end
     end
 end
 
@@ -527,7 +531,11 @@ UIS.InputBegan:Connect(function(input, gp)
             local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
             if root then
                 local mouse = player:GetMouse()
-                if mouse.Target then root.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0)) end
+                if mouse.Target then
+                    local cf = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
+                    root.CFrame = cf
+                    tpLockCF = cf; tpLockFrames = 15
+                end
             end
         end)
     end
@@ -535,6 +543,16 @@ end)
 
 UIS.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then rightMouseDown = false end
+end)
+
+-- ============ TP LOCK ============
+RunService.Heartbeat:Connect(function()
+    if tpLockFrames > 0 and tpLockCF and player.Character then
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then hrp.CFrame = tpLockCF end
+        tpLockFrames = tpLockFrames - 1
+        if tpLockFrames <= 0 then tpLockCF = nil end
+    end
 end)
 
 -- ============ MOUNT ============
