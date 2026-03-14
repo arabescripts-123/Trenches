@@ -20,6 +20,13 @@ local rightMouseDown = false
 local espBoxes, espConnections = {}, {}
 local noclipEnabled = false
 local noclipCollisions = {}
+local perfEnabled = false
+local ultraEnabled = false
+local originalLighting = {}
+local originalEffects = {}
+local originalTextures = {}
+local ultraEffects = {}
+local rainEmitter = nil
 
 -- ============ GUI ============
 local ScreenGui = Instance.new("ScreenGui")
@@ -31,7 +38,7 @@ local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(35, 30, 25)
 MainFrame.Position = UDim2.new(0.02, 0, 0.25, 0)
-MainFrame.Size = UDim2.new(0, 230, 0, 280)
+MainFrame.Size = UDim2.new(0, 230, 0, 310)
 MainFrame.ClipsDescendants = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 local s = Instance.new("UIStroke", MainFrame)
@@ -198,6 +205,8 @@ infoLbl.TextSize = 10
 
 -- ============ ABA OTHERS ============
 local noclipBtn, noclipInd = createToggle(ContentOthers, "Noclip [N]", 0)
+local perfBtn, perfInd = createToggle(ContentOthers, "Performance", 35)
+local ultraBtn, ultraInd = createToggle(ContentOthers, "Ultra GFX", 70)
 
 -- ============ TEAM DETECTION ============
 local function isEnemy(otherPlayer)
@@ -265,6 +274,165 @@ local function disableESP()
     for key in pairs(espBoxes) do removeESP(key) end
     for _, conn in pairs(espConnections) do if typeof(conn) == "RBXScriptConnection" then conn:Disconnect() end end
     espConnections = {}
+end
+
+-- ============ PERFORMANCE / ULTRA ============
+local Lighting = game:GetService("Lighting")
+
+local function enablePerformance()
+    if ultraEnabled then return end
+    originalLighting = {
+        Brightness = Lighting.Brightness,
+        GlobalShadows = Lighting.GlobalShadows,
+        FogEnd = Lighting.FogEnd,
+        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+    }
+    Lighting.GlobalShadows = false
+    Lighting.EnvironmentDiffuseScale = 0
+    Lighting.EnvironmentSpecularScale = 0
+
+    for _, obj in pairs(Lighting:GetDescendants()) do
+        if obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("SunRaysEffect") or obj:IsA("DepthOfFieldEffect") or obj:IsA("ColorCorrectionEffect") then
+            originalEffects[obj] = obj.Enabled
+            obj.Enabled = false
+        end
+    end
+
+    for _, obj in pairs(workspace:GetDescendants()) do
+        pcall(function()
+            if obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") or obj:IsA("Trail") then
+                if not (player.Character and obj:IsDescendantOf(player.Character)) then
+                    originalTextures[obj] = {Enabled = obj.Enabled}
+                    obj.Enabled = false
+                end
+            elseif obj:IsA("MeshPart") then
+                if not game.Players:GetPlayerFromCharacter(obj.Parent) and not (obj.Parent and game.Players:GetPlayerFromCharacter(obj.Parent.Parent)) then
+                    originalTextures[obj] = {TextureID = obj.TextureID}
+                    obj.TextureID = ""
+                end
+            elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                local par = obj.Parent
+                if par and not game.Players:GetPlayerFromCharacter(par.Parent) then
+                    originalTextures[obj] = {Transparency = obj.Transparency}
+                    obj.Transparency = 1
+                end
+            end
+        end)
+    end
+end
+
+local function disablePerformance()
+    pcall(function()
+        Lighting.GlobalShadows = originalLighting.GlobalShadows or true
+        Lighting.EnvironmentDiffuseScale = originalLighting.EnvironmentDiffuseScale or 1
+        Lighting.EnvironmentSpecularScale = originalLighting.EnvironmentSpecularScale or 1
+    end)
+    for obj, enabled in pairs(originalEffects) do
+        pcall(function() obj.Enabled = enabled end)
+    end
+    originalEffects = {}
+    for obj, data in pairs(originalTextures) do
+        pcall(function()
+            if data.Enabled ~= nil then obj.Enabled = data.Enabled
+            elseif data.TextureID then obj.TextureID = data.TextureID
+            elseif data.Transparency then obj.Transparency = data.Transparency end
+        end)
+    end
+    originalTextures = {}
+    originalLighting = {}
+end
+
+local function enableUltra()
+    if perfEnabled then return end
+    originalLighting = {
+        Brightness = Lighting.Brightness,
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+        GlobalShadows = Lighting.GlobalShadows,
+    }
+    Lighting.GlobalShadows = true
+    Lighting.Brightness = 1.5
+    Lighting.EnvironmentDiffuseScale = 1
+    Lighting.EnvironmentSpecularScale = 1
+
+    local bloom = Instance.new("BloomEffect")
+    bloom.Name = "UltraBloom"
+    bloom.Intensity = 0.4
+    bloom.Size = 30
+    bloom.Threshold = 0.9
+    bloom.Parent = Lighting
+    table.insert(ultraEffects, bloom)
+
+    local cc = Instance.new("ColorCorrectionEffect")
+    cc.Name = "UltraCC"
+    cc.Brightness = 0.02
+    cc.Contrast = 0.15
+    cc.Saturation = 0.25
+    cc.Parent = Lighting
+    table.insert(ultraEffects, cc)
+
+    local sun = Instance.new("SunRaysEffect")
+    sun.Name = "UltraSun"
+    sun.Intensity = 0.08
+    sun.Spread = 0.6
+    sun.Parent = Lighting
+    table.insert(ultraEffects, sun)
+
+    -- Chuva
+    pcall(function()
+        local att = Instance.new("Attachment")
+        att.Name = "RainAtt"
+        att.Parent = workspace.Terrain
+
+        rainEmitter = Instance.new("ParticleEmitter")
+        rainEmitter.Name = "UltraRain"
+        rainEmitter.Texture = "rbxassetid://241876428"
+        rainEmitter.Rate = 800
+        rainEmitter.Lifetime = NumberRange.new(0.8, 1.2)
+        rainEmitter.Speed = NumberRange.new(80, 120)
+        rainEmitter.SpreadAngle = Vector2.new(15, 15)
+        rainEmitter.Rotation = NumberRange.new(0, 0)
+        rainEmitter.RotSpeed = NumberRange.new(0, 0)
+        rainEmitter.Size = NumberSequence.new(0.05, 0.05)
+        rainEmitter.Transparency = NumberSequence.new(0.3, 0.7)
+        rainEmitter.Color = ColorSequence.new(Color3.fromRGB(180, 190, 210))
+        rainEmitter.LightEmission = 0.1
+        rainEmitter.EmissionDirection = Enum.NormalId.Bottom
+        rainEmitter.Parent = att
+        table.insert(ultraEffects, att)
+
+        -- Fog leve pra atmosfera
+        local atm = Instance.new("Atmosphere")
+        atm.Name = "UltraAtm"
+        atm.Density = 0.3
+        atm.Offset = 0.5
+        atm.Color = Color3.fromRGB(150, 160, 175)
+        atm.Decay = Color3.fromRGB(120, 130, 145)
+        atm.Glare = 0.2
+        atm.Haze = 3
+        atm.Parent = Lighting
+        table.insert(ultraEffects, atm)
+    end)
+end
+
+local function disableUltra()
+    for _, obj in pairs(ultraEffects) do
+        pcall(function() obj:Destroy() end)
+    end
+    ultraEffects = {}
+    rainEmitter = nil
+    pcall(function()
+        Lighting.Brightness = originalLighting.Brightness or 1
+        Lighting.Ambient = originalLighting.Ambient or Color3.fromRGB(70, 70, 70)
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient or Color3.fromRGB(70, 70, 70)
+        Lighting.EnvironmentDiffuseScale = originalLighting.EnvironmentDiffuseScale or 1
+        Lighting.EnvironmentSpecularScale = originalLighting.EnvironmentSpecularScale or 1
+        Lighting.GlobalShadows = originalLighting.GlobalShadows or true
+    end)
+    originalLighting = {}
 end
 
 -- ============ NOCLIP ============
@@ -352,6 +520,20 @@ end)
 noclipBtn.MouseButton1Click:Connect(function()
     noclipEnabled = not noclipEnabled
     noclipInd.BackgroundColor3 = noclipEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+end)
+
+perfBtn.MouseButton1Click:Connect(function()
+    if ultraEnabled then return end
+    perfEnabled = not perfEnabled
+    perfInd.BackgroundColor3 = perfEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+    if perfEnabled then enablePerformance() else disablePerformance() end
+end)
+
+ultraBtn.MouseButton1Click:Connect(function()
+    if perfEnabled then return end
+    ultraEnabled = not ultraEnabled
+    ultraInd.BackgroundColor3 = ultraEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+    if ultraEnabled then enableUltra() else disableUltra() end
 end)
 
 -- ============ INPUT ============
