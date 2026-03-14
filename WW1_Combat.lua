@@ -18,11 +18,8 @@ local AIM_FOV = 300
 local espEnabled, aimbotEnabled = false, false
 local rightMouseDown = false
 local espBoxes, espConnections = {}, {}
-local clickTpEnabled = false
-local tpLockCF, tpLockFrames = nil, 0
-local ghostEnabled = false
-local ghostPart, ghostConnection, ghostOverlay, originalCFrame = nil, nil, nil, nil
-local ghostSpeed = 65
+local noclipEnabled = false
+local noclipCollisions = {}
 
 -- ============ GUI ============
 local ScreenGui = Instance.new("ScreenGui")
@@ -34,7 +31,7 @@ local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(35, 30, 25)
 MainFrame.Position = UDim2.new(0.02, 0, 0.25, 0)
-MainFrame.Size = UDim2.new(0, 230, 0, 360)
+MainFrame.Size = UDim2.new(0, 230, 0, 280)
 MainFrame.ClipsDescendants = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 local s = Instance.new("UIStroke", MainFrame)
@@ -188,111 +185,19 @@ fovBox.FocusLost:Connect(function()
     else fovBox.Text = tostring(AIM_FOV) end
 end)
 
--- Ghost TP
-local ghostBtn, ghostInd = createToggle(ContentCombat, "Ghost TP [CapsLk]", 123)
-
 -- Info
 local infoLbl = Instance.new("TextLabel")
 infoLbl.Parent = ContentCombat
 infoLbl.BackgroundTransparency = 1
-infoLbl.Position = UDim2.new(0, 10, 0, 160)
+infoLbl.Position = UDim2.new(0, 10, 0, 123)
 infoLbl.Size = UDim2.new(0, 210, 0, 20)
 infoLbl.Font = Enum.Font.Gotham
-infoLbl.Text = "Z=Menu | RMB=Aim | CapsLk=Ghost"
+infoLbl.Text = "Z=Menu | RMB=Aim"
 infoLbl.TextColor3 = Color3.fromRGB(100, 100, 100)
 infoLbl.TextSize = 10
 
 -- ============ ABA OTHERS ============
--- Click TP
-local ctpBtn, ctpInd = createToggle(ContentOthers, "Click TP [Q]", 0)
-
--- TP Players
-local tpLabel = Instance.new("TextLabel")
-tpLabel.Parent = ContentOthers
-tpLabel.BackgroundTransparency = 1
-tpLabel.Position = UDim2.new(0, 10, 0, 40)
-tpLabel.Size = UDim2.new(0, 210, 0, 18)
-tpLabel.Font = Enum.Font.GothamBold
-tpLabel.Text = "TP Players:"
-tpLabel.TextColor3 = Color3.fromRGB(200, 190, 150)
-tpLabel.TextSize = 12
-tpLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local PlayerListScroll = Instance.new("ScrollingFrame")
-PlayerListScroll.Parent = ContentOthers
-PlayerListScroll.BackgroundColor3 = Color3.fromRGB(45, 40, 35)
-PlayerListScroll.Position = UDim2.new(0, 10, 0, 60)
-PlayerListScroll.Size = UDim2.new(0, 210, 0, 220)
-PlayerListScroll.ScrollBarThickness = 4
-PlayerListScroll.BorderSizePixel = 0
-PlayerListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-Instance.new("UICorner", PlayerListScroll).CornerRadius = UDim.new(0, 6)
-
-local function updatePlayerList()
-    for _, c in pairs(PlayerListScroll:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-    local y = 4
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local f = Instance.new("Frame")
-            f.Parent = PlayerListScroll
-            f.BackgroundColor3 = Color3.fromRGB(60, 55, 48)
-            f.Position = UDim2.new(0, 4, 0, y)
-            f.Size = UDim2.new(1, -8, 0, 36)
-            Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
-
-            local img = Instance.new("ImageLabel")
-            img.Parent = f
-            img.BackgroundTransparency = 1
-            img.Position = UDim2.new(0, 4, 0.5, -14)
-            img.Size = UDim2.new(0, 28, 0, 28)
-            img.Image = "rbxthumb://type=AvatarHeadShot&id=" .. plr.UserId .. "&w=48&h=48"
-            Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
-
-            local lbl = Instance.new("TextLabel")
-            lbl.Parent = f
-            lbl.BackgroundTransparency = 1
-            lbl.Position = UDim2.new(0, 36, 0, 0)
-            lbl.Size = UDim2.new(1, -40, 1, 0)
-            lbl.Font = Enum.Font.Gotham
-            lbl.Text = plr.Name
-            lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-            lbl.TextSize = 11
-            lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-            local btn = Instance.new("TextButton")
-            btn.Parent = f
-            btn.BackgroundTransparency = 1
-            btn.Size = UDim2.new(1, 0, 1, 0)
-            btn.Text = ""
-            btn.MouseButton1Click:Connect(function()
-                pcall(function()
-                    if player.Character and plr.Character then
-                        local r = player.Character:FindFirstChild("HumanoidRootPart")
-                        local t = plr.Character:FindFirstChild("HumanoidRootPart")
-                        if r and t then
-                            local cf = t.CFrame * CFrame.new(0, 0, 3)
-                            r.CFrame = cf
-                            tpLockCF = cf; tpLockFrames = 15
-                        end
-                    end
-                end)
-            end)
-            y = y + 40
-        end
-    end
-    PlayerListScroll.CanvasSize = UDim2.new(0, 0, 0, y + 4)
-end
-
--- Auto-refresh player list
-local lastRefresh = 0
-RunService.Heartbeat:Connect(function()
-    if ContentOthers.Visible and tick() - lastRefresh > 3 then
-        lastRefresh = tick()
-        updatePlayerList()
-    end
-end)
+local noclipBtn, noclipInd = createToggle(ContentOthers, "Noclip [N]", 0)
 
 -- ============ TEAM DETECTION ============
 local function isEnemy(otherPlayer)
@@ -362,84 +267,36 @@ local function disableESP()
     espConnections = {}
 end
 
--- ============ GHOST TP ============
-local function enableGhostMode()
-    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
-    originalCFrame = player.Character.HumanoidRootPart.CFrame
-    local hum = player.Character:FindFirstChild("Humanoid")
-    if hum then hum.WalkSpeed = 0; hum.JumpPower = 0 end
-
-    ghostPart = Instance.new("Part")
-    ghostPart.Name = "GhostPart"
-    ghostPart.Shape = Enum.PartType.Ball
-    ghostPart.Size = Vector3.new(4, 4, 4)
-    ghostPart.Transparency = 0.3
-    ghostPart.Color = Color3.fromRGB(255, 255, 255)
-    ghostPart.Material = Enum.Material.Neon
-    ghostPart.CanCollide = false
-    ghostPart.Anchored = true
-    ghostPart.CFrame = originalCFrame
-    ghostPart.Parent = workspace
-
-    ghostOverlay = Instance.new("Frame")
-    ghostOverlay.Size = UDim2.new(1, 0, 1, 0)
-    ghostOverlay.BackgroundColor3 = Color3.fromRGB(0, 50, 100)
-    ghostOverlay.BackgroundTransparency = 0.8
-    ghostOverlay.BorderSizePixel = 0
-    ghostOverlay.ZIndex = -1
-    ghostOverlay.Parent = ScreenGui
-
-    workspace.CurrentCamera.CameraSubject = ghostPart
-
-    ghostConnection = RunService.Heartbeat:Connect(function()
-        if not ghostEnabled or not ghostPart or not ghostPart.Parent then return end
-        if UIS:GetFocusedTextBox() then return end
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            player.Character.HumanoidRootPart.CFrame = originalCFrame
+-- ============ NOCLIP ============
+RunService.Stepped:Connect(function()
+    if not player.Character then return end
+    pcall(function()
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if noclipEnabled then
+                    if noclipCollisions[part] == nil then
+                        noclipCollisions[part] = part.CanCollide
+                    end
+                    part.CanCollide = false
+                else
+                    if noclipCollisions[part] ~= nil then
+                        part.CanCollide = noclipCollisions[part]
+                        noclipCollisions[part] = nil
+                    end
+                end
+            end
         end
-        local moveDir = Vector3.zero
-        local cam = workspace.CurrentCamera
-        local spd = ghostSpeed / 60
-        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then spd = spd * 2 end
-        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.yAxis end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.yAxis end
-        if moveDir.Magnitude > 0 then ghostPart.CFrame = ghostPart.CFrame + moveDir.Unit * spd end
     end)
-end
-
-local function disableGhostMode(teleport)
-    local ghostCF = ghostPart and ghostPart.CFrame or nil
-    if ghostConnection then ghostConnection:Disconnect(); ghostConnection = nil end
-    if ghostOverlay then ghostOverlay:Destroy(); ghostOverlay = nil end
-    if ghostPart then ghostPart:Destroy(); ghostPart = nil end
-    if player.Character then
-        local hum = player.Character:FindFirstChild("Humanoid")
-        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-        if hum then
-            workspace.CurrentCamera.CameraSubject = hum
-            hum.WalkSpeed = 16; hum.JumpPower = 50
-        end
-        if hrp and teleport and ghostCF then
-            hrp.CFrame = ghostCF
-            tpLockCF = ghostCF; tpLockFrames = 15
-        end
-    end
-end
+end)
 
 -- ============ AIMBOT ============
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local function isVisible(head, enemyChar)
-    local cam = workspace.CurrentCamera
-    local origin = cam.CFrame.Position
+    local origin = workspace.CurrentCamera.CFrame.Position
     local dir = (head.Position - origin)
-    local ignore = {player.Character, enemyChar}
-    rayParams.FilterDescendantsInstances = ignore
+    rayParams.FilterDescendantsInstances = {player.Character, enemyChar}
     local result = workspace:Raycast(origin, dir, rayParams)
     return result == nil
 end
@@ -492,15 +349,9 @@ aimBtn.MouseButton1Click:Connect(function()
     aimInd.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
 end)
 
-ctpBtn.MouseButton1Click:Connect(function()
-    clickTpEnabled = not clickTpEnabled
-    ctpInd.BackgroundColor3 = clickTpEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
-end)
-
-ghostBtn.MouseButton1Click:Connect(function()
-    ghostEnabled = not ghostEnabled
-    ghostInd.BackgroundColor3 = ghostEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
-    if ghostEnabled then enableGhostMode() else disableGhostMode(true) end
+noclipBtn.MouseButton1Click:Connect(function()
+    noclipEnabled = not noclipEnabled
+    noclipInd.BackgroundColor3 = noclipEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
 end)
 
 -- ============ INPUT ============
@@ -508,17 +359,7 @@ UIS.InputBegan:Connect(function(input, gp)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then rightMouseDown = true; return end
     if gp then return end
     if input.KeyCode == Enum.KeyCode.Z then
-        if ghostEnabled then
-            ghostEnabled = false
-            disableGhostMode(false)
-            ghostInd.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-        else
-            MainFrame.Visible = not MainFrame.Visible
-        end
-    elseif input.KeyCode == Enum.KeyCode.CapsLock then
-        ghostEnabled = not ghostEnabled
-        ghostInd.BackgroundColor3 = ghostEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
-        if ghostEnabled then enableGhostMode() else disableGhostMode(true) end
+        MainFrame.Visible = not MainFrame.Visible
     elseif input.KeyCode == Enum.KeyCode.J then
         espEnabled = not espEnabled
         espInd.BackgroundColor3 = espEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
@@ -526,18 +367,9 @@ UIS.InputBegan:Connect(function(input, gp)
     elseif input.KeyCode == Enum.KeyCode.X then
         aimbotEnabled = not aimbotEnabled
         aimInd.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
-    elseif input.KeyCode == Enum.KeyCode.Q and clickTpEnabled then
-        pcall(function()
-            local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local mouse = player:GetMouse()
-                if mouse.Target then
-                    local cf = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
-                    root.CFrame = cf
-                    tpLockCF = cf; tpLockFrames = 15
-                end
-            end
-        end)
+    elseif input.KeyCode == Enum.KeyCode.N then
+        noclipEnabled = not noclipEnabled
+        noclipInd.BackgroundColor3 = noclipEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
     end
 end)
 
@@ -545,26 +377,8 @@ UIS.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then rightMouseDown = false end
 end)
 
--- ============ TP LOCK ============
-RunService.Heartbeat:Connect(function()
-    if tpLockFrames > 0 and tpLockCF and player.Character then
-        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then hrp.CFrame = tpLockCF end
-        tpLockFrames = tpLockFrames - 1
-        if tpLockFrames <= 0 then tpLockCF = nil end
-    end
-end)
-
 -- ============ MOUNT ============
 pcall(function() ScreenGui.Parent = guiParent end)
 if not ScreenGui.Parent then ScreenGui.Parent = player:WaitForChild("PlayerGui") end
 
-player.CharacterAdded:Connect(function()
-    if ghostEnabled then
-        ghostEnabled = false
-        disableGhostMode(false)
-        ghostInd.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    end
-end)
-
-print("[WW1] Carregado! Z=Menu | J=ESP X=Aimbot CapsLk=Ghost Q=ClickTP")
+print("[WW1] Carregado! Z=Menu | J=ESP X=Aimbot N=Noclip")
