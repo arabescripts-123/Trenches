@@ -352,70 +352,178 @@ local function enableUltra()
         EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
         EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
         GlobalShadows = Lighting.GlobalShadows,
+        ClockTime = Lighting.ClockTime,
+        GeographicLatitude = Lighting.GeographicLatitude,
+        ExposureCompensation = Lighting.ExposureCompensation,
+        ColorShift_Top = Lighting.ColorShift_Top,
+        ColorShift_Bottom = Lighting.ColorShift_Bottom,
+        FogColor = Lighting.FogColor,
+        FogEnd = Lighting.FogEnd,
+        FogStart = Lighting.FogStart,
     }
-    Lighting.GlobalShadows = true
-    Lighting.Brightness = 1.5
-    Lighting.EnvironmentDiffuseScale = 1
-    Lighting.EnvironmentSpecularScale = 1
 
+    -- Remover efeitos existentes do jogo pra não conflitar
+    for _, obj in pairs(Lighting:GetChildren()) do
+        if obj:IsA("PostEffect") or obj:IsA("Atmosphere") or obj:IsA("Sky") then
+            originalEffects[obj] = obj.Enabled ~= nil and obj.Enabled or true
+            pcall(function() if obj:FindFirstChild("Enabled") or obj:IsA("PostEffect") then obj.Enabled = false end end)
+        end
+    end
+
+    -- Lighting cinematográfico WW1
+    Lighting.GlobalShadows = true
+    Lighting.Brightness = 1.2
+    Lighting.EnvironmentDiffuseScale = 1
+    Lighting.EnvironmentSpecularScale = 0.8
+    Lighting.ExposureCompensation = 0.3
+    Lighting.Ambient = Color3.fromRGB(30, 35, 45)
+    Lighting.OutdoorAmbient = Color3.fromRGB(60, 65, 75)
+    Lighting.ColorShift_Top = Color3.fromRGB(200, 190, 170)
+    Lighting.ColorShift_Bottom = Color3.fromRGB(50, 55, 70)
+    Lighting.FogColor = Color3.fromRGB(140, 145, 155)
+    Lighting.FogEnd = 2500
+    Lighting.FogStart = 200
+
+    -- Atmosphere — névoa de trincheira WW1
+    local atm = Instance.new("Atmosphere")
+    atm.Name = "UltraAtm"
+    atm.Density = 0.35
+    atm.Offset = 0.4
+    atm.Color = Color3.fromRGB(160, 165, 180)
+    atm.Decay = Color3.fromRGB(130, 135, 150)
+    atm.Glare = 0.15
+    atm.Haze = 6
+    atm.Parent = Lighting
+    table.insert(ultraEffects, atm)
+
+    -- Bloom — brilho suave cinematográfico
     local bloom = Instance.new("BloomEffect")
     bloom.Name = "UltraBloom"
-    bloom.Intensity = 0.4
-    bloom.Size = 30
-    bloom.Threshold = 0.9
+    bloom.Intensity = 0.6
+    bloom.Size = 40
+    bloom.Threshold = 0.8
     bloom.Parent = Lighting
     table.insert(ultraEffects, bloom)
 
+    -- Color Correction — tom sépia/frio de guerra
     local cc = Instance.new("ColorCorrectionEffect")
     cc.Name = "UltraCC"
-    cc.Brightness = 0.02
-    cc.Contrast = 0.15
-    cc.Saturation = 0.25
+    cc.Brightness = 0.03
+    cc.Contrast = 0.2
+    cc.Saturation = -0.15
+    cc.TintColor = Color3.fromRGB(235, 225, 210)
     cc.Parent = Lighting
     table.insert(ultraEffects, cc)
 
+    -- Segunda correção — realce de sombras
+    local cc2 = Instance.new("ColorCorrectionEffect")
+    cc2.Name = "UltraCC2"
+    cc2.Brightness = -0.02
+    cc2.Contrast = 0.1
+    cc2.Saturation = 0.05
+    cc2.Parent = Lighting
+    table.insert(ultraEffects, cc2)
+
+    -- Sun Rays — raios de sol entre nuvens
     local sun = Instance.new("SunRaysEffect")
     sun.Name = "UltraSun"
-    sun.Intensity = 0.08
-    sun.Spread = 0.6
+    sun.Intensity = 0.12
+    sun.Spread = 0.8
     sun.Parent = Lighting
     table.insert(ultraEffects, sun)
 
-    -- Chuva
+    -- Depth of Field — foco cinematográfico
+    local dof = Instance.new("DepthOfFieldEffect")
+    dof.Name = "UltraDOF"
+    dof.FarIntensity = 0.15
+    dof.FocusDistance = 50
+    dof.InFocusRadius = 60
+    dof.NearIntensity = 0.1
+    dof.Parent = Lighting
+    table.insert(ultraEffects, dof)
+
+    -- Blur leve nas bordas
+    local blur = Instance.new("BlurEffect")
+    blur.Name = "UltraBlur"
+    blur.Size = 2
+    blur.Parent = Lighting
+    table.insert(ultraEffects, blur)
+
+    -- Sky dramático
+    local sky = Instance.new("Sky")
+    sky.Name = "UltraSky"
+    sky.CelestialBodiesShown = true
+    sky.StarCount = 0
+    sky.SkyboxBk = "rbxassetid://1012890"
+    sky.SkyboxDn = "rbxassetid://1012891"
+    sky.SkyboxFt = "rbxassetid://1012887"
+    sky.SkyboxLf = "rbxassetid://1012889"
+    sky.SkyboxRt = "rbxassetid://1012888"
+    sky.SkyboxUp = "rbxassetid://1012890"
+    sky.SunAngularSize = 15
+    sky.MoonAngularSize = 8
+    sky.Parent = Lighting
+    table.insert(ultraEffects, sky)
+
+    -- Chuva pesada
     pcall(function()
         local att = Instance.new("Attachment")
         att.Name = "RainAtt"
         att.Parent = workspace.Terrain
 
-        rainEmitter = Instance.new("ParticleEmitter")
-        rainEmitter.Name = "UltraRain"
-        rainEmitter.Texture = "rbxassetid://241876428"
-        rainEmitter.Rate = 800
-        rainEmitter.Lifetime = NumberRange.new(0.8, 1.2)
-        rainEmitter.Speed = NumberRange.new(80, 120)
-        rainEmitter.SpreadAngle = Vector2.new(15, 15)
-        rainEmitter.Rotation = NumberRange.new(0, 0)
-        rainEmitter.RotSpeed = NumberRange.new(0, 0)
-        rainEmitter.Size = NumberSequence.new(0.05, 0.05)
-        rainEmitter.Transparency = NumberSequence.new(0.3, 0.7)
-        rainEmitter.Color = ColorSequence.new(Color3.fromRGB(180, 190, 210))
-        rainEmitter.LightEmission = 0.1
-        rainEmitter.EmissionDirection = Enum.NormalId.Bottom
-        rainEmitter.Parent = att
+        local rain = Instance.new("ParticleEmitter")
+        rain.Name = "UltraRain"
+        rain.Texture = "rbxassetid://241876428"
+        rain.Rate = 1500
+        rain.Lifetime = NumberRange.new(0.6, 1.0)
+        rain.Speed = NumberRange.new(100, 150)
+        rain.SpreadAngle = Vector2.new(10, 10)
+        rain.Rotation = NumberRange.new(0, 0)
+        rain.RotSpeed = NumberRange.new(0, 0)
+        rain.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.03), NumberSequenceKeypoint.new(1, 0.01)})
+        rain.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.8, 0.5), NumberSequenceKeypoint.new(1, 1)})
+        rain.Color = ColorSequence.new(Color3.fromRGB(190, 200, 220))
+        rain.LightEmission = 0.05
+        rain.EmissionDirection = Enum.NormalId.Bottom
+        rain.Drag = 1
+        rain.Parent = att
+        rainEmitter = rain
         table.insert(ultraEffects, att)
 
-        -- Fog leve pra atmosfera
-        local atm = Instance.new("Atmosphere")
-        atm.Name = "UltraAtm"
-        atm.Density = 0.3
-        atm.Offset = 0.5
-        atm.Color = Color3.fromRGB(150, 160, 175)
-        atm.Decay = Color3.fromRGB(120, 130, 145)
-        atm.Glare = 0.2
-        atm.Haze = 3
-        atm.Parent = Lighting
-        table.insert(ultraEffects, atm)
+        -- Respingos no chão (splash)
+        local att2 = Instance.new("Attachment")
+        att2.Name = "SplashAtt"
+        att2.Parent = workspace.Terrain
+
+        local splash = Instance.new("ParticleEmitter")
+        splash.Name = "UltraSplash"
+        splash.Texture = "rbxassetid://241876428"
+        splash.Rate = 300
+        splash.Lifetime = NumberRange.new(0.1, 0.3)
+        splash.Speed = NumberRange.new(2, 5)
+        splash.SpreadAngle = Vector2.new(180, 180)
+        splash.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0.3)})
+        splash.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1)})
+        splash.Color = ColorSequence.new(Color3.fromRGB(170, 180, 200))
+        splash.LightEmission = 0.02
+        splash.EmissionDirection = Enum.NormalId.Top
+        splash.Parent = att2
+        table.insert(ultraEffects, att2)
     end)
+
+    -- Vinheta escura nas bordas (frame GUI)
+    local vignette = Instance.new("ImageLabel")
+    vignette.Name = "UltraVignette"
+    vignette.Size = UDim2.new(1, 0, 1, 0)
+    vignette.Position = UDim2.new(0, 0, 0, 0)
+    vignette.BackgroundTransparency = 1
+    vignette.Image = "rbxassetid://115642383"
+    vignette.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    vignette.ImageTransparency = 0.6
+    vignette.ScaleType = Enum.ScaleType.Stretch
+    vignette.ZIndex = -2
+    vignette.Parent = ScreenGui
+    table.insert(ultraEffects, vignette)
 end
 
 local function disableUltra()
